@@ -114,54 +114,6 @@ def re_run_basic_smoke_test
   sh beaker
 end
 
-def update_submodule(submodule_path, submodule_sha, submodule_name)
-  #  ensure we fetch here, or the describe done later could be wrong
-  git_checkout_command = "cd #{submodule_path} && git fetch origin && " \
-    "git checkout #{submodule_sha}"
-  puts("checking out known passing #{submodule_name} version in submodule: `#{git_checkout_command}`")
-  system(git_checkout_command)
-end
-
-def replace_puppet_pins(passing_puppetagent_sha)
-  # read beaker options hash from its file
-  puts("replacing puppet-agent SHA in #{BEAKER_OPTIONS_FILE} " \
-       "with #{passing_puppetagent_sha}")
-  beaker_options_from_file = eval(File.read(BEAKER_OPTIONS_FILE))
-  # add puppet-agent version value
-  beaker_options_from_file[:puppet_build_version] = passing_puppetagent_sha
-  File.write(BEAKER_OPTIONS_FILE, beaker_options_from_file.pretty_inspect)
-end
-
-namespace :dev_deps_update do
-  desc 'update puppet submodule commit'
-  task :update_puppet_version do
-    my_jenkins_passing_json = jenkins_passing_json_parsed(PUPPET_AGENT_BRANCH)
-    puppet_sha = lookup_passing_puppet_sha(my_jenkins_passing_json)
-    update_submodule(PUPPET_SUBMODULE_PATH, puppet_sha, 'puppet')
-    # replace puppet-agent sha pin in beaker options file
-    replace_puppet_pins(lookup_passing_puppetagent_sha(my_jenkins_passing_json))
-  end
-  desc 'update facter submodule commit'
-  task :update_facter_version do
-    my_jenkins_passing_json = jenkins_passing_json_parsed(FACTER_BRANCH)
-    facter_sha = lookup_passing_facter_sha(my_jenkins_passing_json)
-    update_submodule(FACTER_SUBMODULE_PATH, facter_sha, 'facter')
-  end
-  desc 'commit and push; CAUTION: WILL commit and push, upstream, local changes to the puppet submodule and acceptance options'
-  task :commit_push do
-    git_commit_command = "git checkout #{PUPPETSERVER_BRANCH} && git add #{PUPPET_SUBMODULE_PATH} " \
-      "&& git add #{FACTER_SUBMODULE_PATH} && git add #{BEAKER_OPTIONS_FILE} " \
-      "&& git commit -m '(maint) update submodule versions and agent pin'"
-    git_push_command = "git checkout #{PUPPETSERVER_BRANCH} && git push origin HEAD:#{PUPPETSERVER_BRANCH}"
-    puts "committing submodules and agent pin via: `#{git_commit_command}`"
-    system(git_commit_command)
-    puts "pushing submodules and agent pin via: `#{git_push_command}`"
-    system(git_push_command)
-  end
-  desc 'update puppet versions and commit and push; CAUTION: WILL commit and push, upstream, local changes to the puppet submodule and acceptance options'
-  task :update_dev_deps_w_push => [:update_puppet_version, :update_facter_version, :commit_push]
-end
-
 namespace :spec do
   task :init do
     if ! Dir.exist? TEST_GEMS_DIR
